@@ -34,4 +34,5 @@ tickers = [
     "KHC",
     "DAL",
     "ABNB",
+    "JNJ",
 ]  # Replace with your list of tickers
