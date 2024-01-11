@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 
 import yfinance as yf
