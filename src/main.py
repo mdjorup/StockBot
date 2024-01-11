@@ -1,7 +1,7 @@
 import boto3
 
-from src.tickers import tickers
-from src.utils import allocate_budget, get_stocks
+from tickers import tickers
+from utils import allocate_budget, get_stocks
 
 budget = 250
 
