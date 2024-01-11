@@ -40,8 +40,13 @@ jobs:
                   aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                   aws-region: us-east-1
 
+            - name: Upload to S3
+              run: |
+                  aws s3 cp lambda_function.zip s3://breadbot-code/lambda_function.zip
+
             - name: Deploy Lambda function
               run: |
                   aws lambda update-function-code \
-                      --function-name bread-collector \
-                      --zip-file fileb://lambda_function.zip
+                           --function-name bread-collector \
+                           --s3-bucket breadbot-code \
+                           --s3-key lambda_function.zip
