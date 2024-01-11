@@ -18,15 +18,22 @@ jobs:
               with:
                   python-version: "3.12"
 
-            - name: Install dependencies
+            - name: Install dependencies for arm64
               run: |
                   python -m venv venv
                   source venv/bin/activate
-                  pip install -r requirements.txt
+                  mkdir package
+                  pip install \
+                      --platform manylinux2014_aarch64 \
+                      --target=package \
+                      --implementation cp \
+                      --python-version 3.12 \
+                      --only-binary=:all: --upgrade \
+                      -r requirements.txt
 
             - name: Prepare deployment package
               run: |
-                  cd venv/lib/python3.12/site-packages  # Adjust the python version accordingly
+                  cd package
                   zip -r9 ${{ github.workspace }}/function.zip .
                   cd ${{ github.workspace }}
                   zip -g function.zip -r src/ # assuming 'src/' contains your lambda handler and other source files
