@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import boto3
 import yfinance as yf
 
-budget = 250
+budget = 400
 
 
 tickers = [
@@ -43,6 +43,10 @@ tickers = [
     "DAL",
     "ABNB",
     "JNJ",
+    "COIN",
+    "SQ",
+    "U",
+    "DKNG",
 ]  # Replace with your list of tickers
 
 
@@ -98,16 +102,26 @@ def get_stocks(tickers, period="1mo", rsi_period=14):
     return stocks
 
 
-def allocate_budget(oversold_stocks, budget):
-    # Calculate the inverse of the RSI for each stock
+def calculate_budget_multiplier(average_rsi):
+    multiplier = (100 - average_rsi) / 50
+    # oversold = positive
+    # overbought = negative
 
+    # if difference = 100 -> double the budget
+    # if difference = 50 -> same budget
+    # if difference = 0 -> none of the budget
+    return multiplier
+
+
+def allocate_budget(oversold_stocks, budget, average_rsi):
+    current_budget = budget * calculate_budget_multiplier(average_rsi)
     # Calculate the total of the inverse RSI values
     total_inverse_rsi = sum(stock.inverse_rsi for stock in oversold_stocks)
 
     # Allocate budget based on each stock's share of the total inverse RSI
     allocations = {}
     for stock in oversold_stocks:
-        allocation = (stock.inverse_rsi / total_inverse_rsi) * budget
+        allocation = (stock.inverse_rsi / total_inverse_rsi) * current_budget
         allocations[stock] = allocation
 
     return allocations
@@ -138,13 +152,18 @@ def lambda_handler(event, context):
     oversold_stocks = []  # [(ticker, rsi)]
     overbought_stocks = []  # [(ticker, rsi)]
 
+    average_rsi = sum(stock.rsi for stock in stock_rsis) / len(stock_rsis)
+    print(average_rsi)
+
     for stock in stock_rsis:
         if stock.rsi < oversold_threshold:
             oversold_stocks.append(stock)
         elif stock.rsi > overbought_threshold:
             overbought_stocks.append(stock)
 
-    allocation = allocate_budget(oversold_stocks, budget)
+    allocation = allocate_budget(oversold_stocks, budget, average_rsi)
+
+    total_allocation = sum(allocation.values())
     # [(ticker, amount), ...]
 
     oversold_stocks.sort(key=lambda x: x.rsi)
@@ -181,8 +200,7 @@ Overbought stocks:
 Oversold stocks: 
 {oversold_stock_string}
 
-Here's how you might allocate $250:
+Here's how you might allocate ${total_allocation:.2f}:
 {allocation_string}
 """
-
     send_email_to_sns(subject, message)
