@@ -47,6 +47,8 @@ tickers = [
     "SQ",
     "U",
     "DKNG",
+    "AMD",
+    "SHOP",
 ]  # Replace with your list of tickers
 
 
