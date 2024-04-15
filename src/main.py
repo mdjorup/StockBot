@@ -2,53 +2,22 @@ from dataclasses import dataclass
 
 import boto3
 import yfinance as yf
+from tabulate import tabulate
 
-budget = 400
+budget_per_oversold_stock = 80
 
 
 tickers = [
     "AAPL",
+    "AMZN",
     "MSFT",
     "TSLA",
-    "NVDA",
-    "AMZN",
-    "META",
-    "JPM",
-    "V",
-    "PG",
-    "MA",
-    "HD",
-    "COST",
-    "KO",
-    "PEP",
-    "WMT",
-    "CSCO",
-    "CAT",
-    "GE",
-    "NKE",
-    "LOW",
-    "UBER",
-    "BLK",
-    "SBUX",
-    "CVX",
-    "BX",
-    "PYPL",
-    "TGT",
-    "WM",
     "CMG",
-    "MMM",
-    "LULU",
-    "COF",
-    "KHC",
-    "DAL",
-    "ABNB",
-    "JNJ",
-    "COIN",
-    "SQ",
-    "U",
-    "DKNG",
-    "AMD",
-    "SHOP",
+    "SPOT",
+    "HOOD",
+    "COST",
+    "JPM",
+    "CVS",
 ]  # Replace with your list of tickers
 
 
@@ -82,8 +51,8 @@ class Stock:
         return self.ticker == other.ticker
 
 
-def get_stocks(tickers, period="1mo", rsi_period=14):
-    stocks = []
+def get_stocks(tickers, period="1mo", rsi_period=14) -> list[Stock]:
+    stocks: list[Stock] = []
 
     for ticker in tickers:
         data = yf.download(ticker, period=period)
@@ -104,26 +73,14 @@ def get_stocks(tickers, period="1mo", rsi_period=14):
     return stocks
 
 
-def calculate_budget_multiplier(average_rsi):
-    multiplier = (100 - average_rsi) / 50
-    # oversold = positive
-    # overbought = negative
-
-    # if difference = 100 -> double the budget
-    # if difference = 50 -> same budget
-    # if difference = 0 -> none of the budget
-    return multiplier
-
-
-def allocate_budget(oversold_stocks, budget, average_rsi):
-    current_budget = budget * calculate_budget_multiplier(average_rsi)
+def allocate_budget(oversold_stocks, budget):
     # Calculate the total of the inverse RSI values
     total_inverse_rsi = sum(stock.inverse_rsi for stock in oversold_stocks)
 
     # Allocate budget based on each stock's share of the total inverse RSI
     allocations = {}
     for stock in oversold_stocks:
-        allocation = (stock.inverse_rsi / total_inverse_rsi) * current_budget
+        allocation = (stock.inverse_rsi / total_inverse_rsi) * budget
         allocations[stock] = allocation
 
     return allocations
@@ -151,8 +108,8 @@ def lambda_handler(event, context):
     oversold_threshold = 30
     overbought_threshold = 70
 
-    oversold_stocks = []  # [(ticker, rsi)]
-    overbought_stocks = []  # [(ticker, rsi)]
+    oversold_stocks: list[Stock] = []
+    overbought_stocks: list[Stock] = []
 
     average_rsi = sum(stock.rsi for stock in stock_rsis) / len(stock_rsis)
     print(average_rsi)
@@ -163,7 +120,9 @@ def lambda_handler(event, context):
         elif stock.rsi > overbought_threshold:
             overbought_stocks.append(stock)
 
-    allocation = allocate_budget(oversold_stocks, budget, average_rsi)
+    budget = budget_per_oversold_stock * len(oversold_stocks)
+
+    allocation = allocate_budget(oversold_stocks, budget)
 
     total_allocation = sum(allocation.values())
     # [(ticker, amount), ...]
@@ -178,19 +137,31 @@ def lambda_handler(event, context):
         ]
     )
 
-    oversold_stock_string = "\n".join(
-        [
-            f"{stock.ticker} - ${stock.price:.2f} - {stock.rsi:.2f} RSI"
-            for stock in oversold_stocks
-        ]
+    overbought_data = [
+        [stock.ticker, f"${stock.price:.2f}", f"{stock.rsi:.2f} RSI"]
+        for stock in overbought_stocks
+    ]
+
+    headers = ["Ticker", "Price", "RSI"]
+
+    overbought_stock_string = tabulate(
+        overbought_data, headers=headers, tablefmt="grid"
     )
 
-    allocation_string = "\n".join(
+    oversold_data = [
         [
-            f"{stock.ticker} - ${amount:.2f} - {amount / budget * 100:.2f}%"
-            for stock, amount in allocation.items()
+            stock.ticker,
+            f"${stock.price:.2f}",
+            f"{stock.rsi:.2f} RSI",
+            f"${amount:.2f}",
+            f"{amount / budget * 100:.2f}%",
         ]
-    )
+        for stock, amount in allocation.items()
+    ]
+
+    headers = ["Ticker", "Price", "RSI", "Amount to Allocate", "Budget %"]
+
+    allocation_string = tabulate(oversold_data, headers=headers, tablefmt="grid")
 
     subject = "Weekly Stock Report"
     message = f"""
@@ -199,10 +170,8 @@ Here's your weekly stock report.
 Overbought stocks: 
 {overbought_stock_string}
 
-Oversold stocks: 
-{oversold_stock_string}
-
-Here's how you might allocate ${total_allocation:.2f}:
+Here's how you might allocate ${total_allocation:.2f} to the oversold stocks:
 {allocation_string}
 """
+
     send_email_to_sns(subject, message)
