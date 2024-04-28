@@ -4,7 +4,7 @@ import boto3
 import yfinance as yf
 from tabulate import tabulate
 
-budget_per_oversold_stock = 80
+budget_per_oversold_stock = 90
 
 
 tickers = [
@@ -18,6 +18,7 @@ tickers = [
     "COST",
     "JPM",
     "CVS",
+    "BTC-USD",
 ]  # Replace with your list of tickers
 
 
